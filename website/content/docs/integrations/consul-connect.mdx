@@ -392,8 +392,9 @@ nomad alloc exec -task connect-proxy-count-api b36a cat secrets/.envoy_bootstrap
 nomad alloc fs b36a alloc/logs/envoy_bootstrap.stderr.0
 ```
 
-Note: If the alloc is unable to start successfully, debugging files
-may only be accessible from the host filesystem.
+Note: If the alloc is unable to start successfully, debugging files may
+only be accessible from the host filesystem. The sidecar task secrets directory
+may not be available in systems where it is mounted in a temporary file system.
 
 [count-dashboard]: /img/count-dashboard.png
 [consul_acl]: https://github.com/hashicorp/consul/issues/7414
