@@ -393,8 +393,9 @@ nomad alloc fs b36a alloc/logs/envoy_bootstrap.stderr.0
 ```
 
 Note: If the alloc is unable to start successfully, debugging files may
-only be accessible from the host filesystem. The sidecar task secrets directory
-may not be available in systems where it is mounted in a temporary file system.
+only be accessible from the host filesystem. However, the sidecar task secrets
+directory may not be available in systems where it is mounted in a temporary
+filesystem.
 
 [count-dashboard]: /img/count-dashboard.png
 [consul_acl]: https://github.com/hashicorp/consul/issues/7414

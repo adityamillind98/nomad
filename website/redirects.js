@@ -24,6 +24,22 @@ module.exports = [
     permanent: true,
   },
   */
+
+  // /s/* redirects for useful links that need a stable URL but we may need to
+  // change its destination in the future.
+  {
+    source: '/s/port-plan-failure',
+    destination:
+      'https://www.nomadproject.io/docs/operations/monitoring-nomad#progress',
+    permanent: false,
+  },
+  {
+    source: '/s/envoy-bootstrap-error',
+    destination:
+      'https://developer.hashicorp.com/nomad/docs/integrations/consul-connect#troubleshooting',
+    permanent: false,
+  },
+
   // Rename and re-arrange Autoscaling Internals section
   {
     source: '/nomad/tools/autoscaling/internals/:path*',
