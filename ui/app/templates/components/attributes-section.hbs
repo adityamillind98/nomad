@@ -5,9 +5,15 @@
         {{#if this.prefix}}<span class="is-faded" data-test-prefix>{{this.prefix}}.</span>{{/if}}{{key}}
       </td>
     </tr>
-    <AttributesSection @prefix={{if this.prefix (concat this.prefix "." key) key}} @attributes={{value}} />
+    <AttributesSection @prefix={{if this.prefix (concat this.prefix "." key) key}} @attributes={{value}} @editable={{@editable}} @onKVEdit={{@onKVEdit}} @onKVSave={{@onKVSave}} />
   {{else}}
-    <MetadataKv @prefix={{this.prefix}}
-    @key={{key}} @value={{value}} @editable={{@editable}} @onKVEdit={{@onKVEdit}} @onKVSave={{@onKVSave}} />
+    <MetadataKv
+      @prefix={{this.prefix}}
+      @key={{key}}
+      @value={{value}}
+      @editable={{@editable}}
+      @onKVEdit={{@onKVEdit}}
+      @onKVSave={{@onKVSave}}
+    />
   {{/if}}
 {{/each-in}}
