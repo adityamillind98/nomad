@@ -332,7 +332,7 @@ UPDATE:
 				// TODO We may want to find a more robust way of waiting for rollbacks to launch instead of
 				// just sleeping for 1 sec. If scheduling is slow, this will break update here instead of
 				// waiting for the (eventual) rollback
-				if rollback.ID == deploy.ID {
+				if rollback == nil || rollback.ID == deploy.ID {
 					break UPDATE
 				}
 
