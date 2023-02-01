@@ -442,19 +442,19 @@ func (a *ACLBindingRules) Get(bindingRuleID string, q *QueryOptions) (*ACLBindin
 	return &resp, qm, nil
 }
 
-// ACLOIDC is used to query the ACL OIDC endpoints.
-type ACLOIDC struct {
+// ACLAuth is used to query the ACL OIDC endpoints.
+type ACLAuth struct {
 	client *Client
 }
 
-// ACLOIDC returns a new handle on the ACL auth-methods API client.
-func (c *Client) ACLOIDC() *ACLOIDC {
-	return &ACLOIDC{client: c}
+// ACLAuth returns a new handle on the ACL auth-methods API client.
+func (c *Client) ACLAuth() *ACLAuth {
+	return &ACLAuth{client: c}
 }
 
 // GetAuthURL generates the OIDC provider authentication URL. This URL should
 // be visited in order to sign in to the provider.
-func (a *ACLOIDC) GetAuthURL(req *ACLOIDCAuthURLRequest, q *WriteOptions) (*ACLOIDCAuthURLResponse, *WriteMeta, error) {
+func (a *ACLAuth) GetAuthURL(req *ACLOIDCAuthURLRequest, q *WriteOptions) (*ACLOIDCAuthURLResponse, *WriteMeta, error) {
 	var resp ACLOIDCAuthURLResponse
 	wm, err := a.client.write("/v1/acl/oidc/auth-url", req, &resp, q)
 	if err != nil {
@@ -465,9 +465,18 @@ func (a *ACLOIDC) GetAuthURL(req *ACLOIDCAuthURLRequest, q *WriteOptions) (*ACLO
 
 // CompleteAuth exchanges the OIDC provider token for a Nomad token with the
 // appropriate claims attached.
-func (a *ACLOIDC) CompleteAuth(req *ACLOIDCCompleteAuthRequest, q *WriteOptions) (*ACLToken, *WriteMeta, error) {
+func (a *ACLAuth) CompleteAuth(req *ACLOIDCCompleteAuthRequest, q *WriteOptions) (*ACLToken, *WriteMeta, error) {
 	var resp ACLToken
 	wm, err := a.client.write("/v1/acl/oidc/complete-auth", req, &resp, q)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &resp, wm, nil
+}
+
+func (a *ACLAuth) Login(req *ACLLoginRequest, q *WriteOptions) (*ACLToken, *WriteMeta, error) {
+	var resp ACLToken
+	wm, err := a.client.write("/v1/acl/login", req, &resp, q)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -903,4 +912,15 @@ type ACLOIDCCompleteAuthRequest struct {
 	// RedirectURI is the URL that authorization should redirect to. This is a
 	// required parameter.
 	RedirectURI string
+}
+
+// ACLLoginRequest is the request object to begin auth with an external bearer
+// token provider.
+type ACLLoginRequest struct {
+	// AuthMethodName is the name of the auth method being used to login. This
+	// is a required parameter.
+	AuthMethodName string
+
+	// BearerToken is the token used to login. This is a required parameter.
+	BearerToken string
 }

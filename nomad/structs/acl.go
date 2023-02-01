@@ -1413,8 +1413,8 @@ type ACLCompleteAuthResponse struct {
 	WriteMeta
 }
 
-// ACLLoginRequest is the request object to begin completing the
-// OIDC auth cycle after receiving the callback from the OIDC provider.
+// ACLLoginRequest is the request object to begin auth with an external bearer
+// token provider.
 type ACLLoginRequest struct {
 
 	// AuthMethodName is the name of the auth method being used to login. This
