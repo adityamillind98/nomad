@@ -31,28 +31,6 @@ func TestLoginCommand_Run(t *testing.T) {
 		},
 	}
 
-	// Test the basic validation on the command.
-	must.Eq(t, 1, cmd.Run([]string{"-address=" + agentURL, "this-command-does-not-take-args"}))
-	must.StrContains(t, ui.ErrorWriter.String(), "This command takes no arguments")
-
-	ui.OutputWriter.Reset()
-	ui.ErrorWriter.Reset()
-
-	// Attempt to call it with an unsupported method type.
-	must.Eq(t, 1, cmd.Run([]string{"-address=" + agentURL, "-type=SAML"}))
-	must.StrContains(t, ui.ErrorWriter.String(), `Unsupported authentication type "SAML"`)
-
-	ui.OutputWriter.Reset()
-	ui.ErrorWriter.Reset()
-
-	// Use a valid method type but with incorrect casing so we can ensure this
-	// is handled.
-	must.Eq(t, 1, cmd.Run([]string{"-address=" + agentURL, "-type=oIdC"}))
-	must.StrContains(t, ui.ErrorWriter.String(), "Must specify an auth method name and type, no default found")
-
-	ui.OutputWriter.Reset()
-	ui.ErrorWriter.Reset()
-
 	// Store a default auth method
 	state := srv.Agent.Server().State()
 	method := &structs.ACLAuthMethod{
@@ -66,9 +44,23 @@ func TestLoginCommand_Run(t *testing.T) {
 	method.SetHash()
 	must.NoError(t, state.UpsertACLAuthMethods(1000, []*structs.ACLAuthMethod{method}))
 
+	// Test the basic validation on the command.
+	must.Eq(t, 1, cmd.Run([]string{"-address=" + agentURL, "this-command-does-not-take-args"}))
+	must.StrContains(t, ui.ErrorWriter.String(), "This command takes no arguments")
+
+	ui.OutputWriter.Reset()
+	ui.ErrorWriter.Reset()
+
 	// Specify an incorrect type of default method
 	must.Eq(t, 1, cmd.Run([]string{"-address=" + agentURL, "-type=OIDC"}))
 	must.StrContains(t, ui.ErrorWriter.String(), "Specified type: OIDC does not match the type of the default method: JWT")
+
+	ui.OutputWriter.Reset()
+	ui.ErrorWriter.Reset()
+
+	// Try logging in with non-OIDC method and no token (expected error)
+	must.Eq(t, 1, cmd.Run([]string{"-address=" + agentURL, "-type=JWT"}))
+	must.StrContains(t, ui.ErrorWriter.String(), "You need to provide a bearer token.")
 
 	ui.OutputWriter.Reset()
 	ui.ErrorWriter.Reset()

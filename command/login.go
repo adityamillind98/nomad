@@ -24,6 +24,7 @@ type LoginCommand struct {
 	authMethodType string
 	authMethodName string
 	callbackAddr   string
+	bearerToken    string
 
 	template string
 	json     bool
@@ -53,7 +54,12 @@ Login Options:
 
   -oidc-callback-addr
     The address to use for the local OIDC callback server. This should be given
-    in the form of <IP>:<PORT> and defaults to "localhost:4649".
+    in the form of <IP>:<PORT> and defaults to "localhost:4649". It is only
+    required if using OIDC auth method type. 
+
+  -bearer-token
+    Bearer token used for authentication that will be exchanged for a Nomad ACL
+    Token. It is only required if using auth method type other than OIDC. 
 
   -json
     Output the ACL token in JSON format.
@@ -73,8 +79,9 @@ func (l *LoginCommand) AutocompleteFlags() complete.Flags {
 	return mergeAutocompleteFlags(l.Meta.AutocompleteFlags(FlagSetClient),
 		complete.Flags{
 			"-method":             complete.PredictAnything,
-			"-type":               complete.PredictSet("OIDC"),
+			"-type":               complete.PredictSet("OIDC", "JWT"),
 			"-oidc-callback-addr": complete.PredictAnything,
+			"-bearer-token":       complete.PredictNothing,
 			"-json":               complete.PredictNothing,
 			"-t":                  complete.PredictAnything,
 		})
@@ -90,6 +97,7 @@ func (l *LoginCommand) Run(args []string) int {
 	flags.Usage = func() { l.Ui.Output(l.Help()) }
 	flags.StringVar(&l.authMethodName, "method", "", "")
 	flags.StringVar(&l.authMethodType, "type", "", "")
+	flags.StringVar(&l.bearerToken, "bearer-token", "", "")
 	flags.StringVar(&l.callbackAddr, "oidc-callback-addr", "localhost:4649", "")
 	flags.BoolVar(&l.json, "json", false, "")
 	flags.StringVar(&l.template, "t", "", "")
@@ -104,6 +112,65 @@ func (l *LoginCommand) Run(args []string) int {
 		return 1
 	}
 
+	client, err := l.Meta.Client()
+	if err != nil {
+		l.Ui.Error(fmt.Sprintf("Error initializing client: %s", err))
+		return 1
+	}
+
+	// is there a default method available? Useful for further checks.
+	var defaultMethod *api.ACLAuthMethodListStub
+
+	authMethodList, _, err := client.ACLAuthMethods().List(nil)
+	if err != nil {
+		l.Ui.Error(fmt.Sprintf("Error listing ACL auth methods: %s", err))
+		return 1
+	}
+
+	for _, authMethod := range authMethodList {
+		if authMethod.Default {
+			defaultMethod = authMethod
+		}
+	}
+
+	defaultMethodAvailable := defaultMethod != nil
+
+	// If the caller did not supply an auth method name or type, attempt to
+	// lookup the default. This ensures a nice UX as clusters are expected to
+	// only have one method, and this avoids having to type the name during
+	// each login.
+	if l.authMethodName == "" {
+		if defaultMethodAvailable {
+			l.authMethodName = defaultMethod.Name
+		} else {
+			l.Ui.Error("Must specify an auth method name, no default found")
+			return 1
+		}
+	}
+
+	if l.authMethodType == "" {
+		if defaultMethodAvailable {
+			l.authMethodType = defaultMethod.Type
+		} else {
+			l.Ui.Error("Must specify an auth method type, no default found")
+			return 1
+		}
+	}
+
+	if l.authMethodType != defaultMethod.Type {
+		l.Ui.Error(fmt.Sprintf(
+			"Specified type: %s does not match the type of the default method: %s",
+			l.authMethodType, defaultMethod.Type,
+		))
+		return 1
+	}
+
+	// Make sure we got the bearer token if we're not using OIDC
+	if l.authMethodType != api.ACLAuthMethodTypeOIDC && l.bearerToken == "" {
+		l.Ui.Error("You need to provide a bearer token.")
+		return 1
+	}
+
 	// Auth method types are particular with their naming, so ensure we forgive
 	// any case mistakes here from the user.
 	sanitizedMethodType := strings.ToUpper(l.authMethodType)
@@ -114,49 +181,10 @@ func (l *LoginCommand) Run(args []string) int {
 	// explicitly.
 	switch sanitizedMethodType {
 	case api.ACLAuthMethodTypeOIDC:
+	case api.ACLAuthMethodTypeJWT:
 	default:
 		l.Ui.Error(fmt.Sprintf("Unsupported authentication type %q", sanitizedMethodType))
 		return 1
-	}
-
-	client, err := l.Meta.Client()
-	if err != nil {
-		l.Ui.Error(fmt.Sprintf("Error initializing client: %s", err))
-		return 1
-	}
-
-	// If the caller did not supply an auth method name or type, attempt to
-	// lookup the default. This ensures a nice UX as clusters are expected to
-	// only have one method, and this avoids having to type the name during
-	// each login.
-	if l.authMethodName == "" {
-
-		authMethodList, _, err := client.ACLAuthMethods().List(nil)
-		if err != nil {
-			l.Ui.Error(fmt.Sprintf("Error listing ACL auth methods: %s", err))
-			return 1
-		}
-
-		for _, authMethod := range authMethodList {
-			if authMethod.Default {
-				l.authMethodName = authMethod.Name
-				if l.authMethodType == "" {
-					l.authMethodType = authMethod.Type
-				}
-				if l.authMethodType != authMethod.Type {
-					l.Ui.Error(fmt.Sprintf(
-						"Specified type: %s does not match the type of the default method: %s",
-						l.authMethodType, authMethod.Type,
-					))
-					return 1
-				}
-			}
-		}
-
-		if l.authMethodName == "" || l.authMethodType == "" {
-			l.Ui.Error("Must specify an auth method name and type, no default found")
-			return 1
-		}
 	}
 
 	// Each login type should implement a function which matches this signature
@@ -167,6 +195,8 @@ func (l *LoginCommand) Run(args []string) int {
 	switch sanitizedMethodType {
 	case api.ACLAuthMethodTypeOIDC:
 		authFn = l.loginOIDC
+	case api.ACLAuthMethodTypeJWT:
+		authFn = l.loginJWT
 	default:
 		l.Ui.Error(fmt.Sprintf("Unsupported authentication type %q", sanitizedMethodType))
 		return 1
@@ -210,7 +240,7 @@ func (l *LoginCommand) loginOIDC(ctx context.Context, client *api.Client) (*api.
 		ClientNonce:    callbackServer.Nonce(),
 	}
 
-	getAuthURLResp, _, err := client.ACLOIDC().GetAuthURL(&getAuthArgs, nil)
+	getAuthURLResp, _, err := client.ACLAuth().GetAuthURL(&getAuthArgs, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +275,18 @@ func (l *LoginCommand) loginOIDC(ctx context.Context, client *api.Client) (*api.
 		State:          req.State,
 	}
 
-	token, _, err := client.ACLOIDC().CompleteAuth(&cbArgs, nil)
+	token, _, err := client.ACLAuth().CompleteAuth(&cbArgs, nil)
+	return token, err
+}
+
+func (l *LoginCommand) loginJWT(ctx context.Context, client *api.Client) (*api.ACLToken, error) {
+
+	authArgs := api.ACLLoginRequest{
+		AuthMethodName: l.authMethodName,
+		BearerToken:    l.token,
+	}
+
+	token, _, err := client.ACLAuth().Login(&authArgs, nil)
 	return token, err
 }
 
