@@ -2802,7 +2802,7 @@ func (a *ACL) Login(args *structs.ACLLoginRequest, reply *structs.ACLCompleteAut
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(aclLoginRequestExpiryTime))
 	defer cancel()
 
-	claims := map[string]interface{}{}
+	var claims = make(map[string]interface{})
 
 	// Validate the token depending on its method type
 	switch authMethod.Type {
