@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/nomad/ci"
+	"github.com/shoenig/test/must"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -1824,4 +1825,21 @@ func TestUtil_connectSidecarServiceUpdated(t *testing.T) {
 		b := &structs.ConsulSidecarService{Port: "1111"}
 		require.False(t, connectSidecarServiceUpdated(a, b))
 	})
+}
+
+func TestTasksUpdated_Identity(t *testing.T) {
+	ci.Parallel(t)
+
+	j1 := mock.Job()
+	name := j1.TaskGroups[0].Name
+	j1.TaskGroups[0].Tasks[0].Identity = nil
+
+	j2 := j1.Copy()
+
+	must.False(t, tasksUpdated(j1, j2, name))
+
+	// Set identity on j1 and assert update
+	j1.TaskGroups[0].Tasks[0].Identity = &structs.WorkloadIdentity{}
+
+	must.True(t, tasksUpdated(j1, j2, name))
 }
